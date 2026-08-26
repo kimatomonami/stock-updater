@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import re
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import yfinance as yf
@@ -20,15 +21,22 @@ data = sheet.get_all_values()
 
 print(f"Total rows found: {len(data) - 1}")
 
-# 3. AC列(29列目)のコードを読み込んで、各種データを指定の列に書き込み
+# 3. AC列(29列目)のコードを読み込んで処理し、結果をまとめておく
+updates = []
+
 for i, row in enumerate(data[1:], start=2): # 1行目はヘッダーと仮定
     if len(row) < 29:
         continue
     
     ticker_symbol = row[28].strip() # AC列 (インデックス28)
-    if not ticker_symbol:
-        print(f"Row {i}: Ticker is empty. Skipping.")
+    
+    # 空白、または「ティッカー」「Y ファイナンス」などの文字が含まれている場合はスキップ
+    if not ticker_symbol or not re.search(r'\d', ticker_symbol):
         continue
+    
+    # 末尾に .T がついていない日本株コード（例: 7203）の場合は自動で .T を補完
+    if ticker_symbol.isdigit() and len(ticker_symbol) == 4:
+        ticker_symbol += ".T"
     
     print(f"Processing Row {i}: {ticker_symbol} ...")
     
@@ -46,24 +54,34 @@ for i, row in enumerate(data[1:], start=2): # 1行目はヘッダーと仮定
         if not dividend:
             dividend = info.get('trailingAnnualDividendRate', 0)
             
-        # 利回りの取得 (0.03 などの小数なので 100倍して％表記にする)
+        # 利回りの取得
         yield_val = info.get('dividendYield', 0)
         if yield_val:
             yield_val = yield_val * 100
             
-        # 指定された列にデータを書き込み (上書き)
-        sheet.update_cell(i, 19, f"{yield_val:.2f}%" if yield_val else "N/A")
-        sheet.update_cell(i, 21, dividend if dividend else "N/A")
-        sheet.update_cell(i, 30, price if price else "N/A")
+        yield_str = f"{yield_val:.2f}%" if yield_val else "N/A"
+        div_str = dividend if dividend else "N/A"
+        price_str = price if price else "N/A"
         
-        print(f" -> Success: Price={price}, Div={dividend}, Yield={yield_val}%")
+        # まとめて書き込むためのリストに追加
+        # cell(row, col, value) の形式
+        updates.append({"range": f"S{i}", "values": [[yield_str]]})
+        updates.append({"range": f"U{i}", "values": [[div_str]]})
+        updates.append({"range": f"AD{i}", "values": [[price_str]]})
         
-        # Yahoo Financeへの負荷を減らすため、1銘柄ごとに1秒待機する
+        print(f" -> Prepared: Price={price_str}, Div={div_str}, Yield={yield_str}")
+        
+        # Yahoo Financeへの負荷軽減
         time.sleep(1)
         
     except Exception as e:
         print(f" -> Error fetching {ticker_symbol} at Row {i}: {e}")
-        # エラーが出ても次の行へ進む
         continue
 
-print("All rows processed.")
+# 4. スプレッドシートへ一括書き込み（API制限回避）
+if updates:
+    print("Writing updates to Google Sheets...")
+    sheet.batch_update(updates)
+    print("All updates completed successfully!")
+else:
+    print("No updates to write.")
