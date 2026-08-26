@@ -39,16 +39,9 @@ for i, row in enumerate(data[1:], start=2):
         if not dividend:
             dividend = info.get('trailingAnnualDividendRate', 0)
             
-        # 利ロバの取得部分
+        # 利回りの取得（100倍の掛け算を削除）
         yield_val = info.get('dividendYield', 0)
-        if yield_val:
-            # もし取得した値が 1 未満（例: 0.0395）なら 100倍してパーセントにする
-            # すでに 1 以上（例: 3.95 や 395）になっている場合はそのままにする
-            if yield_val < 1.0:
-                yield_val = yield_val * 100
-            
-        yield_str = f"{yield_val:.2f}%" if yield_val else "N/A"
-            
+        
         yield_str = f"{yield_val:.2f}%" if yield_val else "N/A"
         div_str = dividend if dividend else "N/A"
         
