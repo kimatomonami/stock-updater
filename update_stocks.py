@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import yfinance as yf
@@ -17,15 +18,19 @@ client = gspread.authorize(creds)
 sheet = client.open_by_key(spreadsheet_id).sheet1
 data = sheet.get_all_values()
 
+print(f"Total rows found: {len(data) - 1}")
+
 # 3. AC列(29列目)のコードを読み込んで、各種データを指定の列に書き込み
-# A=1, ..., S=19(利回り), U=21(配当額), AC=29(コード), AD=30(株価)
 for i, row in enumerate(data[1:], start=2): # 1行目はヘッダーと仮定
     if len(row) < 29:
         continue
     
-    ticker_symbol = row[28] # AC列 (インデックス28)
+    ticker_symbol = row[28].strip() # AC列 (インデックス28)
     if not ticker_symbol:
+        print(f"Row {i}: Ticker is empty. Skipping.")
         continue
+    
+    print(f"Processing Row {i}: {ticker_symbol} ...")
     
     try:
         ticker = yf.Ticker(ticker_symbol)
@@ -47,14 +52,18 @@ for i, row in enumerate(data[1:], start=2): # 1行目はヘッダーと仮定
             yield_val = yield_val * 100
             
         # 指定された列にデータを書き込み (上書き)
-        # S列(19列目): 利回り
         sheet.update_cell(i, 19, f"{yield_val:.2f}%" if yield_val else "N/A")
-        # U列(21列目): 配当額
         sheet.update_cell(i, 21, dividend if dividend else "N/A")
-        # AD列(30列目): 株価
         sheet.update_cell(i, 30, price if price else "N/A")
         
-        print(f"Updated {ticker_symbol} -> Price: {price}, Div: {dividend}, Yield: {yield_val}%")
+        print(f" -> Success: Price={price}, Div={dividend}, Yield={yield_val}%")
+        
+        # Yahoo Financeへの負荷を減らすため、1銘柄ごとに1秒待機する
+        time.sleep(1)
         
     except Exception as e:
-        print(f"Error fetching {ticker_symbol}: {e}")
+        print(f" -> Error fetching {ticker_symbol} at Row {i}: {e}")
+        # エラーが出ても次の行へ進む
+        continue
+
+print("All rows processed.")
