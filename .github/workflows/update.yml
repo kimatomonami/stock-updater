@@ -2,9 +2,9 @@ name: Update Japanese Stock Dividend Data
 
 on:
   schedule:
-    # 3ヶ月おき（例：1月、4月、7月、10月の1日のUTC 0:00 = 日本時間午前9時に実行）
-    - cron: '0 0 1 1,4,7,10 *'
-  workflow_dispatch: # GitHubの画面から手動でも実行できるようにする
+    # 毎日、日本時間の朝9時（UTC 0:00）に実行する場合
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 手動実行ボタンもそのまま残します
 
 jobs:
   update-sheet:
