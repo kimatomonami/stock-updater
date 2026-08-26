@@ -1,0 +1,31 @@
+name: Update Japanese Stock Dividend Data
+
+on:
+  schedule:
+    # 3ヶ月おき（例：1月、4月、7月、10月の1日のUTC 0:00 = 日本時間午前9時に実行）
+    - cron: '0 0 1 1,4,7,10 *'
+  workflow_dispatch: # GitHubの画面から手動でも実行できるようにする
+
+jobs:
+  update-sheet:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run update script
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+        run: |
+          python update_stocks.py
